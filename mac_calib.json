@@ -1,0 +1,35 @@
+{
+    "camera": "Câmara HD FaceTime (integrada) (05ac:8514)",
+    "platform": "Macintosh; Intel Mac OS X 10_15_7",
+    "avg_reprojection_error": 1.6730261075155137,
+    "camera_matrix": [
+        [
+            942.2778458640017,
+            0,
+            636.898111776291
+        ],
+        [
+            0,
+            946.896116804522,
+            405.45681464476786
+        ],
+        [
+            0,
+            0,
+            1
+        ]
+    ],
+    "distortion_coefficients": [
+        -0.007574449506918484,
+        -0.16696507835814586,
+        0.005954991219207065,
+        0.0016744647761098121,
+        0.3191633376366791
+    ],
+    "distortion_model": "rectilinear",
+    "img_size": [
+        1280,
+        720
+    ],
+    "calibration_time": "Thu, 07 Dec 2023 00:31:49 GMT"
+}
