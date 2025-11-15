@@ -3,15 +3,11 @@ import numpy as np
 import time
 import ntcore
 import argparse
-
-S = np.array([
-    [ 0,  0,  1],   # forward  = +Z_cv
-    [-1,  0,  0],   # left     = -X_cv
-    [ 0, -1,  0],   # up       = -Y_cv
-], dtype=np.float64)
+import math
 
 def main():
     parser = argparse.ArgumentParser()
+
     parser.add_argument(
         "-t",
         "--team",
@@ -26,8 +22,15 @@ def main():
         help="should setup for sim"
     )
 
-    args = parser.parse_args()
+    parser.add_argument(
+        "-n",
+        "--networktable",
+        action="store_false",
+        help="push to network tables"
+    )
 
+    args = parser.parse_args()
+    
     inst = ntcore.NetworkTableInstance.getDefault()
     inst.startClient4("vizion")
 
@@ -120,8 +123,9 @@ def main():
         )
 
         tag_str = "tag ids: "
+        print(ids)
 
-        if ids is not None and len(ids) > 0:
+        if ids is not None:
             cv2.aruco.drawDetectedMarkers(vis, corners, ids)
 
             for id in ids:
@@ -144,17 +148,19 @@ def main():
                 rvecs.append(rvec)
                 tvecs.append(tvec)
 
-                x, y, z, roll, pitch, yaw = opencv_pnp_to_wpilib_pose(rvec, tvec)
+                # x, y, z, roll, pitch, yaw = opencv_pnp_to_wpilib_pose(rvec, tvec)
+                
+                if args.networktable:
+                    if tag_id not in tag_pose_publishers:
+                        topic_name = f"tag_{int(tag_id)}_pose_cam"
+                        tag_pose_publishers[tag_id] = vision_table.getDoubleArrayTopic(topic_name).publish()
 
-                topic_name = f"tag_{int(tag_id)}_pose_cam"
-                if tag_id not in tag_pose_publishers:
-                    tag_pose_publishers[tag_id] = vision_table.getDoubleArrayTopic(topic_name).publish()
+                    pub = tag_pose_publishers[tag_id]
 
-                pub = tag_pose_publishers[tag_id]
+                    # pub.set([x, y, z, roll, pitch, yaw])
 
-                pub.set([x, y, z, roll, pitch, yaw])
-
-            inst.flush()
+            if args.networktable:
+                inst.flush()
 
             for i in range(len(ids)):
                 cv2.drawFrameAxes(vis, win_cam_mat, win_dist_coeff, rvecs[i], tvecs[i], marker_size)
@@ -179,40 +185,28 @@ def main():
     cv2.destroyAllWindows()
 
 
-# TODO: FIGURE OUT WHAT THIS DOES ITS GPT
 def opencv_pnp_to_wpilib_pose(rvec, tvec):
     """
     rvec, tvec from cv2.solvePnP for a TAG.
     Returns (x, y, z, roll, pitch, yaw) of the TAG in the CAMERA frame,
     expressed in WPILib's coordinate system.
     """
-     # 1) Rotation matrix in OpenCV camera frame (tag -> cam_cv)
-    R_cv, _ = cv2.Rodrigues(rvec)      # (3,3)
-    t_cv = tvec.reshape(3, 1)          # (3,1)
 
-    # 2) Change basis: OpenCV camera -> WPILib camera
-    R_wp = S @ R_cv                    # (3,3)
-    t_wp = S @ t_cv                    # (3,1)
+    pass
 
-    # 3) Translation in WPILib camera frame
-    x, y, z = t_wp.flatten().tolist()
 
-    # 4) Extract roll, pitch, yaw from R_wp (Rotation3d convention)
-    R = R_wp
-    sy = np.sqrt(R[0, 0]**2 + R[1, 0]**2)
-    singular = sy < 1e-6
+def opencv_to_wpilib(tvec: np.typing.NDArray[np.float64], rvec: np.typing.NDArray[np.float64]) -> Pose3d:
+    return Pose3d(
+        Translation3d(tvec[2][0], -tvec[0][0], -tvec[1][0]),
+        Rotation3d(
+            numpy.array([rvec[2][0], -rvec[0][0], -rvec[1][0]]),
+            math.sqrt(math.pow(rvec[0][0], 2) + math.pow(rvec[1][0], 2) + math.pow(rvec[2][0], 2)),
+        ),
+    )
 
-    if not singular:
-        roll  = np.arctan2(R[2, 1], R[2, 2])       # about X
-        pitch = np.arctan2(-R[2, 0], sy)           # about Y
-        yaw   = np.arctan2(R[1, 0], R[0, 0])       # about Z
-    else:
-        roll  = np.arctan2(-R[1, 2], R[1, 1])
-        pitch = np.arctan2(-R[2, 0], sy)
-        yaw   = 0.0
 
-    return x, y, z, roll, pitch, yaw
-
+def wpilibTranslationToOpenCv(translation: Translation3d) -> List[float]:
+    return [-translation.Y(), -translation.Z(), translation.X()]
 
 if __name__ == "__main__":
     main()
