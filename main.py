@@ -1,9 +1,50 @@
+from typing import List
+from config import marker_size
+from numpy.typing import NDArray
+
 import cv2
 import numpy as np
 import time
 import ntcore
 import argparse
 import math
+import platform
+
+from wpimath.geometry import Pose3d, Translation3d, Rotation3d
+
+cam_mat = np.array([
+    [942.2778458640017, 0, 636.898111776291],
+    [0, 946.896116804522, 405.45681464476786],
+    [0, 0, 1],
+], dtype=np.float32)
+
+dist_coeff = np.array([
+    -0.007574449506918484,
+    -0.16696507835814586,
+    0.005954991219207065,
+    0.0016744647761098121,
+    0.3191633376366791], dtype=np.float32)
+
+win_cam_mat = np.array([
+    [975.6914800562727, 0, 657.1922238570544],
+    [0, 976.3474157317961, 351.54103305664995],
+    [0, 0, 1]
+], dtype=np.float32)
+
+win_dist_coeff = np.array([
+    0.04389964856406952,
+    -0.17211539337258833,
+    -0.002305299309464663,
+    0.0016484276591536293,
+    0.13158928243393753 
+], dtype=np.float32)
+
+coord_system = np.array([
+    [-marker_size / 2,  marker_size / 2, 0],
+    [ marker_size / 2,  marker_size / 2, 0],
+    [ marker_size / 2, -marker_size / 2, 0],
+    [-marker_size / 2, -marker_size / 2, 0]
+], dtype=np.float32).reshape(-1, 1, 3)
 
 def main():
     parser = argparse.ArgumentParser()
@@ -29,61 +70,40 @@ def main():
         help="push to network tables"
     )
 
+    parser.add_argument(
+        "-d",
+        "--debug",
+        action="store_false",
+        help="show debug information on output"
+    )
+
+    os_name = platform.system() # TODO: Log this onto the debug output
+    print(os_name)
+
     args = parser.parse_args()
-    
+
+    print("Starting NT Client")
     inst = ntcore.NetworkTableInstance.getDefault()
     inst.startClient4("vizion")
 
-    vision_table = inst.getTable("vision")
+    vision_table = inst.getTable("fid-pipeline")
+
+    print("Generating Camera Calibrations")
 
     tag_pose_publishers = {}
 
+    print("Starting NT Server")
     if args.sim:
         inst.setServer("localhost")
     else:
         inst.setServerTeam(args.team)
 
+    print("Starting Video Capture")
     cap = cv2.VideoCapture(0)
 
-    aruco_dict: cv2.aruco.Dictionary = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_APRILTAG_36h11)
-    params = cv2.aruco.DetectorParameters()
+    aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_APRILTAG_36h11)
+    params = cv2.aruco.DetectorParameters() # TODO: This needs to be exposed to users
     detector = cv2.aruco.ArucoDetector(aruco_dict, params)
-
-    cam_mat = np.array([
-        [942.2778458640017, 0, 636.898111776291],
-        [0, 946.896116804522, 405.45681464476786],
-        [0, 0, 1],
-    ], dtype=np.float32)
-
-    dist_coeff = np.array([
-        -0.007574449506918484,
-        -0.16696507835814586,
-        0.005954991219207065,
-        0.0016744647761098121,
-        0.3191633376366791], dtype=np.float32)
-
-    win_cam_mat = np.array([
-        [975.6914800562727, 0, 657.1922238570544],
-        [0, 976.3474157317961, 351.54103305664995],
-        [0, 0, 1]
-    ], dtype=np.float32)
-
-    win_dist_coeff = np.array([
-        0.04389964856406952,
-        -0.17211539337258833,
-        -0.002305299309464663,
-        0.0016484276591536293,
-        0.13158928243393753 
-    ], dtype=np.float32)
-
-    marker_size = 0.071
-
-    coord_system = np.array([
-        [-marker_size / 2,  marker_size / 2, 0],
-        [ marker_size / 2,  marker_size / 2, 0],
-        [ marker_size / 2, -marker_size / 2, 0],
-        [-marker_size / 2, -marker_size / 2, 0]
-    ], dtype=np.float32).reshape(-1, 1, 3)
 
     prev_frame_time, new_frame_time = 0, 0
 
@@ -99,14 +119,11 @@ def main():
         prev_frame_time = new_frame_time
         fps_text = "fps: " +  str(int(fps))
 
-        if len(frame.shape) == 2:
-            frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2BGR)
-        elif len(frame.shape) == 4:
-            frame = cv2.cvtColor(frame, cv2.COLOR_BGRA2BGR)
+        frame = make_safe_frame(frame)
 
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
-        corners, ids, rejected = detector.detectMarkers(gray)
+        corners, ids, _ = detector.detectMarkers(gray)
         rvecs, tvecs = [], []
 
         vis = frame.copy()
@@ -123,13 +140,14 @@ def main():
         )
 
         tag_str = "tag ids: "
-        print(ids)
 
         if ids is not None:
             cv2.aruco.drawDetectedMarkers(vis, corners, ids)
 
-            for id in ids:
-                tag_str += str(id[0]) + " "
+            # for id in ids:
+                # tag_str += str(id) + " "
+
+            # for corner, tag_id in zip(corners, ids.flatten()):
 
 
             for corner, tag_id in zip(corners, ids.flatten()):
@@ -138,8 +156,8 @@ def main():
                 success, rvec, tvec = cv2.solvePnP(
                     coord_system.astype(np.float32),
                     img_points,
-                    win_cam_mat.astype(np.float32),
-                    win_dist_coeff.astype(np.float32)
+                    win_cam_mat,
+                    win_dist_coeff,
                 )
 
                 if not success:
@@ -149,7 +167,8 @@ def main():
                 tvecs.append(tvec)
 
                 # x, y, z, roll, pitch, yaw = opencv_pnp_to_wpilib_pose(rvec, tvec)
-                
+                pose = opencv_to_wpilib(tvec[0], rvec[0])
+
                 if args.networktable:
                     if tag_id not in tag_pose_publishers:
                         topic_name = f"tag_{int(tag_id)}_pose_cam"
@@ -157,7 +176,15 @@ def main():
 
                     pub = tag_pose_publishers[tag_id]
 
-                    # pub.set([x, y, z, roll, pitch, yaw])
+                    pub.set([
+                        pose.X(),
+                        pose.Y(),
+                        pose.Z(),
+                        pose.rotation().X(),
+                        pose.rotation().Y(),
+                        pose.rotation().Z()
+                    ])
+
 
             if args.networktable:
                 inst.flush()
@@ -184,22 +211,24 @@ def main():
     cap.release()
     cv2.destroyAllWindows()
 
+def make_safe_frame(frame: NDArray) -> NDArray:
+    safe_frame: NDArray
 
-def opencv_pnp_to_wpilib_pose(rvec, tvec):
-    """
-    rvec, tvec from cv2.solvePnP for a TAG.
-    Returns (x, y, z, roll, pitch, yaw) of the TAG in the CAMERA frame,
-    expressed in WPILib's coordinate system.
-    """
+    if len(frame.shape) == 2:
+        safe_frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2BGR)
+    elif len(frame.shape) == 4:
+        safe_frame = cv2.cvtColor(frame, cv2.COLOR_BGRA2BGR)
+    else:
+        safe_frame = frame
 
-    pass
+    return safe_frame
 
-
+# ALL OF MECH ADV CODE HERE
 def opencv_to_wpilib(tvec: np.typing.NDArray[np.float64], rvec: np.typing.NDArray[np.float64]) -> Pose3d:
     return Pose3d(
         Translation3d(tvec[2][0], -tvec[0][0], -tvec[1][0]),
         Rotation3d(
-            numpy.array([rvec[2][0], -rvec[0][0], -rvec[1][0]]),
+            np.array([rvec[2][0], -rvec[0][0], -rvec[1][0]]),
             math.sqrt(math.pow(rvec[0][0], 2) + math.pow(rvec[1][0], 2) + math.pow(rvec[2][0], 2)),
         ),
     )
@@ -207,6 +236,7 @@ def opencv_to_wpilib(tvec: np.typing.NDArray[np.float64], rvec: np.typing.NDArra
 
 def wpilibTranslationToOpenCv(translation: Translation3d) -> List[float]:
     return [-translation.Y(), -translation.Z(), translation.X()]
+# END OF MECH ADV CODE
 
 if __name__ == "__main__":
     main()
