@@ -124,7 +124,7 @@ def main():
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
         corners, ids, _ = detector.detectMarkers(gray)
-        rvecs, tvecs = [], []
+        rvecs_arr, tvecs_arr = [], []
 
         vis = frame.copy()
 
@@ -144,30 +144,30 @@ def main():
         if ids is not None:
             cv2.aruco.drawDetectedMarkers(vis, corners, ids)
 
+            tag_ids = ids.flatten()
+
             # for id in ids:
                 # tag_str += str(id) + " "
-
-            # for corner, tag_id in zip(corners, ids.flatten()):
-
 
             for corner, tag_id in zip(corners, ids.flatten()):
                 img_points = corner.reshape(-1, 1, 2).astype(np.float32)
 
-                success, rvec, tvec = cv2.solvePnP(
+                _, rvecs, tvecs, errors = cv2.solvePnPGeneric(
                     coord_system.astype(np.float32),
                     img_points,
-                    win_cam_mat,
-                    win_dist_coeff,
+                    cam_mat,
+                    dist_coeff,
+                    flags=cv2.SOLVEPNP_IPPE_SQUARE
                 )
 
-                if not success:
+                rvecs_arr.append(rvecs)
+                tvecs_arr.append(tvecs)
+
+                if errors is not None:
                     continue
 
-                rvecs.append(rvec)
-                tvecs.append(tvec)
-
                 # x, y, z, roll, pitch, yaw = opencv_pnp_to_wpilib_pose(rvec, tvec)
-                pose = opencv_to_wpilib(tvec[0], rvec[0])
+                pose = opencv_to_wpilib(tvecs[0], rvecs[0])
 
                 if args.networktable:
                     if tag_id not in tag_pose_publishers:
@@ -190,7 +190,7 @@ def main():
                 inst.flush()
 
             for i in range(len(ids)):
-                cv2.drawFrameAxes(vis, win_cam_mat, win_dist_coeff, rvecs[i], tvecs[i], marker_size)
+                cv2.drawFrameAxes(vis, cam_mat, dist_coeff, rvecs_arr[i], tvecs_arr[i], marker_size)
 
         cv2.putText(
             vis,

@@ -31,7 +31,7 @@ public class Robot extends LoggedRobot {
   NetworkTableInstance inst = NetworkTableInstance.getDefault();
   NetworkTable visionTable = inst.getTable("vision");
   
-  DoubleArraySubscriber tag67sub = visionTable.getDoubleArrayTopic("tag_67_pose_cam").subscribe(new double[0]);
+  DoubleArraySubscriber tag67sub = visionTable.getDoubleArrayTopic("tag_42_pose_cam").subscribe(new double[0]);
 
   /**
    * This function is run when the robot is first started up and should be used
