@@ -1,4 +1,6 @@
 from typing import List
+
+from cv2.typing import MatLike
 from config import marker_size
 from numpy.typing import NDArray
 
@@ -54,6 +56,7 @@ def main():
         "--team",
         type=int,
         help="Team Number",
+        default=2473
     )
 
     parser.add_argument(
@@ -66,7 +69,7 @@ def main():
     parser.add_argument(
         "-n",
         "--networktable",
-        action="store_false",
+        action="store_true",
         help="push to network tables"
     )
 
@@ -146,8 +149,8 @@ def main():
 
             tag_ids = ids.flatten()
 
-            # for id in ids:
-                # tag_str += str(id) + " "
+            for id in ids:
+                tag_str += str(id) + " "
 
             for corner, tag_id in zip(corners, ids.flatten()):
                 img_points = corner.reshape(-1, 1, 2).astype(np.float32)
@@ -167,9 +170,12 @@ def main():
                     continue
 
                 # x, y, z, roll, pitch, yaw = opencv_pnp_to_wpilib_pose(rvec, tvec)
+                print(tvecs)
+                print(rvecs)
                 pose = opencv_to_wpilib(tvecs[0], rvecs[0])
 
                 if args.networktable:
+                    print("Hello")
                     if tag_id not in tag_pose_publishers:
                         topic_name = f"tag_{int(tag_id)}_pose_cam"
                         tag_pose_publishers[tag_id] = vision_table.getDoubleArrayTopic(topic_name).publish()
@@ -190,7 +196,7 @@ def main():
                 inst.flush()
 
             for i in range(len(ids)):
-                cv2.drawFrameAxes(vis, cam_mat, dist_coeff, rvecs_arr[i], tvecs_arr[i], marker_size)
+                cv2.drawFrameAxes(vis, cam_mat, dist_coeff, rvecs_arr[i][0], tvecs_arr[i][0], marker_size)
 
         cv2.putText(
             vis,
@@ -224,7 +230,7 @@ def make_safe_frame(frame: NDArray) -> NDArray:
     return safe_frame
 
 # ALL OF MECH ADV CODE HERE
-def opencv_to_wpilib(tvec: np.typing.NDArray[np.float64], rvec: np.typing.NDArray[np.float64]) -> Pose3d:
+def opencv_to_wpilib(tvec: MatLike, rvec: MatLike) -> Pose3d:
     return Pose3d(
         Translation3d(tvec[2][0], -tvec[0][0], -tvec[1][0]),
         Rotation3d(
