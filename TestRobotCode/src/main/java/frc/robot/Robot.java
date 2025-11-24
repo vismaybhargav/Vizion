@@ -4,11 +4,9 @@
 
 package frc.robot;
 
-import org.littletonrobotics.junction.LogFileUtil;
 import org.littletonrobotics.junction.LoggedRobot;
 import org.littletonrobotics.junction.Logger;
 import org.littletonrobotics.junction.networktables.NT4Publisher;
-import org.littletonrobotics.junction.wpilog.WPILOGReader;
 import org.littletonrobotics.junction.wpilog.WPILOGWriter;
 
 import edu.wpi.first.math.geometry.Pose3d;
@@ -29,7 +27,7 @@ import edu.wpi.first.networktables.NetworkTableInstance;
 public class Robot extends LoggedRobot {
 
   NetworkTableInstance inst = NetworkTableInstance.getDefault();
-  NetworkTable visionTable = inst.getTable("vision");
+  NetworkTable visionTable = inst.getTable("fid-pipeline");
   
   DoubleArraySubscriber tag67sub = visionTable.getDoubleArrayTopic("tag_67_pose_cam").subscribe(new double[0]);
 
