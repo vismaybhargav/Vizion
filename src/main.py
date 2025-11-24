@@ -1,0 +1,237 @@
+from typing import List
+
+from cv2.typing import MatLike
+from config import marker_size 
+from numpy.typing import NDArray 
+import cv2
+import numpy as np
+import time
+import ntcore
+import argparse
+import math
+import platform
+
+from wpimath.geometry import Pose3d, Translation3d, Rotation3d
+
+def main():
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument(
+        "-t",
+        "--team",
+        type=int,
+        help="Team Number",
+        default=2473
+    )
+
+    parser.add_argument(
+        "-s",
+        "--sim",
+        action="store_true",
+        help="should setup for sim"
+    )
+
+    parser.add_argument(
+        "-n",
+        "--networktable",
+        action="store_true",
+        help="push to network tables"
+    )
+
+    parser.add_argument(
+        "-d",
+        "--debug",
+        action="store_false",
+        help="show debug information on output"
+    )
+
+    parser.add_argument(
+        "-mt",
+        "--multitag",
+        action="store_false",
+        help="use multitag targeting in the fid pipeline"
+    )
+
+    os_name = platform.system()
+    print(os_name)
+
+    args = parser.parse_args()
+
+    print("Starting NT Client")
+    inst = ntcore.NetworkTableInstance.getDefault()
+    inst.startClient4("vizion")
+
+    vision_table = inst.getTable("fid-pipeline")
+
+    print("Generating Camera Calibrations")
+
+    tag_pose_publishers = {}
+
+    print("Starting NT Server")
+    if args.sim:
+        inst.setServer("localhost")
+    else:
+        inst.setServerTeam(args.team)
+
+    print("Starting Video Capture")
+    cap = cv2.VideoCapture(0)
+
+    aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_APRILTAG_36h11)
+    params = cv2.aruco.DetectorParameters() # TODO: This needs to be exposed to users
+    detector = cv2.aruco.ArucoDetector(aruco_dict, params)
+
+    prev_frame_time, new_frame_time = 0, 0
+
+    while True:
+        ret, frame = cap.read()
+
+        if not ret:
+            print("Error: recieve frame")
+            break
+
+        new_frame_time = time.time()
+        fps = 1 / (new_frame_time - prev_frame_time)
+        prev_frame_time = new_frame_time
+        fps_text = "fps: " +  str(int(fps))
+
+        frame = make_safe_frame(frame)
+
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+        corners, ids, _ = detector.detectMarkers(gray)
+        rvecs_arr, tvecs_arr = [], []
+
+        vis = frame.copy()
+
+        cv2.putText(
+            vis, 
+            fps_text,
+            (10, 70), 
+            cv2.FONT_HERSHEY_SIMPLEX,
+            2,
+            (0, 255, 0),
+            3,
+            cv2.LINE_AA
+        )
+
+        tag_str = "tag ids: "
+
+        if ids is not None:
+            cv2.aruco.drawDetectedMarkers(vis, corners, ids)
+
+            tag_ids = ids.flatten()
+
+            for id in ids:
+                tag_str += str(id) + " "
+
+            obsv_points = []
+            coords = []
+
+            for corner, tag_id in zip(corners, tag_ids):
+                # TODO: prepare all tags and stuff for solvePNP
+                pass
+
+            if len(tag_ids) == 1:
+                img_points = corners[0].reshape(-1, 1, 2).astype(np.float32)
+
+                _, rvecs, tvecs, errors = cv2.solvePnPGeneric(
+                    single_tag_coord_system.astype(np.float32),
+                    img_points,
+                    win_cam_mat,
+                    win_dist_coeff,
+                    flags=cv2.SOLVEPNP_IPPE_SQUARE
+                )
+
+                # TODO: move network table publishing
+            elif args.multitag:
+                # TODO: Implement multitag targeting
+                pass
+
+
+            for corner, tag_id in zip(corners, ids.flatten()):
+                img_points = corner.reshape(-1, 1, 2).astype(np.float32)
+
+                _, rvecs, tvecs, errors = cv2.solvePnPGeneric(
+                    single_tag_coord_system.astype(np.float32),
+                    img_points,
+                    win_cam_mat,
+                    win_dist_coeff,
+                    flags=cv2.SOLVEPNP_IPPE_SQUARE
+                )
+
+                rvecs_arr.append(rvecs)
+                tvecs_arr.append(tvecs)
+
+                pose = opencv_to_wpilib(tvecs[0], rvecs[0])
+
+                if args.networktable:
+                    if tag_id not in tag_pose_publishers:
+                        topic_name = f"tag_{int(tag_id)}_pose_cam"
+                        tag_pose_publishers[tag_id] = vision_table.getDoubleArrayTopic(topic_name).publish()
+
+                    pub = tag_pose_publishers[tag_id]
+
+                    pub.set([
+                        pose.X(),
+                        pose.Y(),
+                        pose.Z(),
+                        pose.rotation().X(),
+                        pose.rotation().Y(),
+                        pose.rotation().Z()
+                    ])
+
+
+            if args.networktable:
+                inst.flush()
+
+            for i in range(len(ids)):
+                cv2.drawFrameAxes(vis, win_cam_mat, win_dist_coeff, rvecs_arr[i][0], tvecs_arr[i][0], marker_size)
+
+        cv2.putText(
+            vis,
+            tag_str,
+            (10, 140),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            2,
+            (0, 255, 0),
+            3,
+            cv2.LINE_AA
+        )
+
+        cv2.imshow("Live Feed", vis)
+
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+
+    cap.release()
+    cv2.destroyAllWindows()
+
+def make_safe_frame(frame: NDArray) -> NDArray:
+    safe_frame: NDArray
+
+    if len(frame.shape) == 2:
+        safe_frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2BGR)
+    elif len(frame.shape) == 4:
+        safe_frame = cv2.cvtColor(frame, cv2.COLOR_BGRA2BGR)
+    else:
+        safe_frame = frame
+
+    return safe_frame
+
+# ALL OF MECH ADV CODE HERE
+def opencv_to_wpilib(tvec: MatLike, rvec: MatLike) -> Pose3d:
+    return Pose3d(
+        Translation3d(tvec[2][0], -tvec[0][0], -tvec[1][0]),
+        Rotation3d(
+            np.array([rvec[2][0], -rvec[0][0], -rvec[1][0]]),
+            math.sqrt(math.pow(rvec[0][0], 2) + math.pow(rvec[1][0], 2) + math.pow(rvec[2][0], 2)),
+        ),
+    )
+
+
+def wpilibTranslationToOpenCv(translation: Translation3d) -> List[float]:
+    return [-translation.Y(), -translation.Z(), translation.X()]
+# END OF MECH ADV CODE
+
+if __name__ == "__main__":
+    main()
