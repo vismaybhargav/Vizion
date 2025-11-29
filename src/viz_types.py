@@ -9,7 +9,7 @@ class Fiducial:
     Fiducial Tag. Represented by a id and a pose
     """
 
-    tag_id: int
+    id: int
     """
     ID of the tag
     """

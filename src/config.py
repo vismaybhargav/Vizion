@@ -103,6 +103,12 @@ class FiducialMap:
                 )
             )
 
+    def get_tag_by_id(self, tag_id: int) -> Fiducial | None:
+        for tag in self.tags:
+            if tag.id == tag_id:
+                return tag
+        return None
+
 class ConfigManager:
     """
     Container for all hardware and spatial configs
