@@ -1,11 +1,8 @@
-from sys import flags
 from typing import List
 from cv2.typing import MatLike
-from config import MARKER_SIZE, ConfigManager, SINGLE_FID_COORD_SYSTEM, FiducialMap
+from config import MARKER_SIZE, ConfigManager, SINGLE_FID_COORD_SYSTEM
 from numpy.typing import NDArray 
 from wpimath.geometry import Pose3d, Transform3d, Translation3d, Rotation3d
-import config
-from viz_types import Fiducial, FiducialObservation
 
 import cv2
 import numpy as np
@@ -20,13 +17,13 @@ def main():
     parser = argparse.ArgumentParser()
     setup_parser(parser)
     
-    logging.basicConfig(level=logging.INFO)
+    args = parser.parse_args()
+
+    logging.basicConfig(level=( logging.DEBUG if args.debug else logging.INFO ))
     logger = logging.getLogger("[Vizion] [Fiducial Pipeline]")
 
     os_name = platform.system()
     logger.info(os_name)
-
-    args = parser.parse_args()
 
     logger.info("Starting NT Client")
     inst = ntcore.NetworkTableInstance.getDefault()
@@ -101,6 +98,7 @@ def main():
             tag_ids = []
 
             for corner, tag_id in zip(corners, ids.flatten()):
+                logger.debug(corner.shape)
                 tag_pose = None
                 tag = config_manager.fiducial_map.get_tag_by_id(int(tag_id))
 
@@ -136,7 +134,7 @@ def main():
                     tag_ids.append(tag_id)
                     tag_poses.append(tag_pose)
 
-
+            logger.info(len(tag_ids))
             if len(tag_ids) == 1:
                 img_points = corners[0].reshape(-1, 1, 2).astype(np.float32)
 
@@ -321,7 +319,7 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "-mt",
         "--multi-tag",
-        action="store_false",
+        action="store_true",
         help="use multitag targeting in the fid pipeline"
     )
 
@@ -331,6 +329,13 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
         type=int,
         default=60,
         help="FPS to run the camera at"
+    )
+
+    parser.add_argument(
+        "-d",
+        "--debug",
+        action="store_false",
+        help="Show debug logs"
     )
 
 if __name__ == "__main__":
