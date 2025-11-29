@@ -3,6 +3,15 @@ revision = 3
 requires-python = ">=3.12"
 
 [[package]]
+name = "cscore"
+version = "1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/1a/d6/77ed20efd56c9ed236523b86b9cecbf0db5a4bf89b631e7edbb20511357b/cscore-1.tar.gz", hash = "sha256:d269343976dda608b7b1d5f2db627eb3d72e4c58d4f5cc372ad4f7842b02d996", size = 3127, upload-time = "2024-09-08T10:49:09.142Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/09/50/9e020f6d8f51317205e7a4b099edc008118b5d911432601f20147bbb90b5/cscore-1-py3-none-any.whl", hash = "sha256:f5e734d4b4e713e66516be690beb3dc2560b6831424f664d778663add57e977e", size = 3524, upload-time = "2024-09-08T10:49:07.655Z" },
+]
+
+[[package]]
 name = "msvc-runtime"
 version = "14.44.35112"
 source = { registry = "https://pypi.org/simple" }
@@ -222,6 +231,7 @@ name = "vizion"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "cscore" },
     { name = "opencv-python" },
     { name = "pyntcore" },
     { name = "robotpy-wpimath" },
@@ -229,6 +239,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "cscore", specifier = ">=1" },
     { name = "opencv-python", specifier = ">=4.12.0.88" },
     { name = "pyntcore", specifier = ">=2025.3.2.3" },
     { name = "robotpy-wpimath", specifier = ">=2025.3.2.3" },
