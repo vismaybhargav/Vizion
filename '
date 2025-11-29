@@ -1,11 +1,38 @@
-from numpy.typing import NDArray
-from wpimath.geometry import Pose3d, Quaternion, Rotation3d, Translation3d
-from viz_types import Fiducial
-
 import numpy as np
 import json
+from dataclasses import dataclass
+from numpy.typing import NDArray
+from wpimath.geometry import Pose3d, Quaternion, Rotation3d, Translation3d
+import cv2
 
 MARKER_SIZE = 0.071 # meters
+
+cam_mat = np.array([
+    [942.2778458640017, 0, 636.898111776291],
+    [0, 946.896116804522, 405.45681464476786],
+    [0, 0, 1],
+], dtype=np.float32)
+
+dist_coeff = np.array([
+    -0.007574449506918484,
+    -0.16696507835814586,
+    0.005954991219207065,
+    0.0016744647761098121,
+    0.3191633376366791], dtype=np.float32)
+
+win_cam_mat = np.array([
+    [975.6914800562727, 0, 657.1922238570544],
+    [0, 976.3474157317961, 351.54103305664995],
+    [0, 0, 1]
+], dtype=np.float32)
+
+win_dist_coeff = np.array([
+    0.04389964856406952,
+    -0.17211539337258833,
+    -0.002305299309464663,
+    0.0016484276591536293,
+    0.13158928243393753 
+], dtype=np.float32)
 
 SINGLE_FID_COORD_SYSTEM = np.array([
     [-MARKER_SIZE / 2,  MARKER_SIZE / 2, 0],
@@ -13,6 +40,16 @@ SINGLE_FID_COORD_SYSTEM = np.array([
     [ MARKER_SIZE / 2, -MARKER_SIZE / 2, 0],
     [-MARKER_SIZE / 2, -MARKER_SIZE / 2, 0]
 ], dtype=np.float32).reshape(-1, 1, 3)
+
+@dataclass(frozen=True)
+class Fiducial:
+    """
+    Fiducial Tag. Represented by a id and a pose
+    """
+
+    tag_id: int
+    pose: Pose3d
+    type: str = "36h11" # TODO: Need a system for this to change accordingly
 
 class CameraCalibration:
     """
@@ -29,20 +66,7 @@ class CameraCalibration:
     Camera Matrix. Must be 3x3
     """
 
-    resolution_width: int
-    """
-    Max resolution width of the camera
-    """
-
-    resolution_height: int
-    """
-    Max resolution height of the camera
-    """
-
-    def __init__(self, calibration: dict) -> None:
-        camera_matrix = calibration["camera_matrix"]
-        distortion_coefficients = calibration["distortion_coefficients"]
-
+    def __init__(self, distortion_coefficients: list[float], camera_matrix: list[list[float]]) -> None:
         if len(camera_matrix) != 3 and len(camera_matrix[0]) != 3:
             raise ValueError("Camera Matrix is not of size 3x3")
 
@@ -51,15 +75,13 @@ class CameraCalibration:
 
         self.dist_coeff = np.array(distortion_coefficients, dtype=np.float32)
         self.cam_mat = np.array(camera_matrix, dtype=np.float32)
-        self.resolution_width = calibration["img_size"][0]
-        self.resolution_height = calibration["img_size"][1]
 
 class FiducialMap:
     """
     Map of all poses of the fiducials in the map for multitag targeting
     """
 
-    tags: list[Fiducial] = []
+    tags: list[Fiducial]
     """
     List of all the tags
     """
@@ -79,8 +101,8 @@ class FiducialMap:
         self.field_width = wpi_tag_data["field"]["width"]
 
         for tag in wpi_tag_data["tags"]:
-            translation = tag["pose"]["translation"]
-            rotation = tag["pose"]["rotation"]["quaternion"]
+            translation = tag["translation"]
+            rotation = tag["rotation"]["quaternion"]
 
             self.tags.append(
                 Fiducial(
@@ -108,12 +130,12 @@ class ConfigManager:
     Container for all hardware and spatial configs
     """
 
+    camera_calibration: CameraCalibration
     fiducial_map: FiducialMap
-    calibration_data: CameraCalibration
 
     def __init__(self, tag_file_path: str, calibration_path: str) -> None:
-        self.fiducial_map = FiducialMap(self.__load_json(tag_file_path))
-        self.calibration_data = CameraCalibration(self.__load_json(calibration_path))
+        self.tag_data = FiducialMap(self.__load_json(tag_file_path))
+        self.calibration_data = self.__load_json(calibration_path)
 
     def __load_json(self, file_path: str) -> dict:
         """

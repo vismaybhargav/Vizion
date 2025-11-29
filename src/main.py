@@ -1,8 +1,9 @@
 from typing import List
-
 from cv2.typing import MatLike
-from config import marker_size 
+from config import MARKER_SIZE, ConfigManager, SINGLE_FID_COORD_SYSTEM
 from numpy.typing import NDArray 
+from wpimath.geometry import Pose3d, Translation3d, Rotation3d
+
 import cv2
 import numpy as np
 import time
@@ -10,8 +11,6 @@ import ntcore
 import argparse
 import math
 import platform
-
-from wpimath.geometry import Pose3d, Translation3d, Rotation3d
 
 def main():
     parser = argparse.ArgumentParser()
@@ -64,6 +63,10 @@ def main():
     vision_table = inst.getTable("fid-pipeline")
 
     print("Generating Camera Calibrations")
+    config_manager = ConfigManager(
+        "maps/map.json", 
+        "calibrations/mac_calib.json" if os_name == "Darwin" else "calibrations/OV9821_calib.json"
+    )
 
     tag_pose_publishers = {}
 
@@ -74,7 +77,7 @@ def main():
         inst.setServerTeam(args.team)
 
     print("Starting Video Capture")
-    cap = cv2.VideoCapture(0)
+    cap = cv2.VideoCapture(1)
 
     aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_APRILTAG_36h11)
     params = cv2.aruco.DetectorParameters() # TODO: This needs to be exposed to users
@@ -130,32 +133,32 @@ def main():
             for corner, tag_id in zip(corners, tag_ids):
                 # TODO: prepare all tags and stuff for solvePNP
                 pass
-
-            if len(tag_ids) == 1:
-                img_points = corners[0].reshape(-1, 1, 2).astype(np.float32)
-
-                _, rvecs, tvecs, errors = cv2.solvePnPGeneric(
-                    single_tag_coord_system.astype(np.float32),
-                    img_points,
-                    win_cam_mat,
-                    win_dist_coeff,
-                    flags=cv2.SOLVEPNP_IPPE_SQUARE
-                )
-
-                # TODO: move network table publishing
-            elif args.multitag:
-                # TODO: Implement multitag targeting
-                pass
+            
+            # if len(tag_ids) == 1:
+            #     img_points = corners[0].reshape(-1, 1, 2).astype(np.float32)
+            #
+            #     _, rvecs, tvecs, errors = cv2.solvePnPGeneric(
+            #         SINGLE_FID_COORD_SYSTEM.astype(np.float32),
+            #         img_points,
+            #         config_manager.calibration_data.cam_mat,
+            #         config_manager.calibration_data.dist_coeff,
+            #         flags=cv2.SOLVEPNP_IPPE_SQUARE
+            #     )
+            #
+            #     # TODO: move network table publishing
+            # elif args.multitag:
+            #     # TODO: Implement multitag targeting
+            #     pass
 
 
             for corner, tag_id in zip(corners, ids.flatten()):
                 img_points = corner.reshape(-1, 1, 2).astype(np.float32)
 
                 _, rvecs, tvecs, errors = cv2.solvePnPGeneric(
-                    single_tag_coord_system.astype(np.float32),
+                    SINGLE_FID_COORD_SYSTEM.astype(np.float32),
                     img_points,
-                    win_cam_mat,
-                    win_dist_coeff,
+                    config_manager.calibration_data.cam_mat,
+                    config_manager.calibration_data.dist_coeff,
                     flags=cv2.SOLVEPNP_IPPE_SQUARE
                 )
 
@@ -185,7 +188,14 @@ def main():
                 inst.flush()
 
             for i in range(len(ids)):
-                cv2.drawFrameAxes(vis, win_cam_mat, win_dist_coeff, rvecs_arr[i][0], tvecs_arr[i][0], marker_size)
+                cv2.drawFrameAxes(
+                    vis,
+                    config_manager.calibration_data.cam_mat,
+                    config_manager.calibration_data.dist_coeff,
+                    rvecs_arr[i][0],
+                    tvecs_arr[i][0],
+                    MARKER_SIZE
+                )
 
         cv2.putText(
             vis,
@@ -232,6 +242,7 @@ def opencv_to_wpilib(tvec: MatLike, rvec: MatLike) -> Pose3d:
 def wpilibTranslationToOpenCv(translation: Translation3d) -> List[float]:
     return [-translation.Y(), -translation.Z(), translation.X()]
 # END OF MECH ADV CODE
+
 
 if __name__ == "__main__":
     main()
