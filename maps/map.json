@@ -1,0 +1,63 @@
+{
+	"tags": [
+		{
+			"ID": 67,
+			"pose": {
+				"translation": {
+					"x": 0,
+					"y": 1.8288,
+					"z": 1.4859
+				},
+				"rotation": {
+					"quaternion": {
+						"W": 1,
+						"X": 0.0,
+						"Y": 0.0,
+						"Z": 0
+					}
+				}
+			}
+		},
+		{
+			"ID": 2,
+			"pose": {
+				"translation": {
+					"x": 6.096,
+					"y": 1.2192,
+					"z": 0.308
+				},
+				"rotation": {
+					"quaternion": {
+						"W": 0,
+						"X": 0,
+						"Y": 0,
+						"Z": 1
+					}
+				}
+			}
+		},
+		{
+			"ID": 3,
+			"pose": {
+				"translation": {
+					"x": 6.096,
+					"y": 2.438,
+					"z": 0.308
+				},
+				"rotation": {
+					"quaternion": {
+						"W": 0,
+						"X": 0,
+						"Y": 0,
+						"Z": 1
+					}
+				}
+			}
+		}
+	],
+	"field": {
+		"length": 17.548225,
+		"width": 8.0518
+	}
+}
+
