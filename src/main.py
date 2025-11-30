@@ -1,7 +1,7 @@
 from typing import List
 from cv2.typing import MatLike
 from config import MARKER_SIZE, ConfigManager, SINGLE_FID_COORD_SYSTEM
-from numpy.typing import NDArray 
+from numpy.typing import NDArray
 from wpimath.geometry import Pose3d, Transform3d, Translation3d, Rotation3d
 
 import cv2
@@ -16,7 +16,7 @@ import logging
 def main():
     parser = argparse.ArgumentParser()
     setup_parser(parser)
-    
+
     args = parser.parse_args()
 
     logging.basicConfig(level=( logging.DEBUG if args.debug else logging.INFO ))
@@ -33,7 +33,7 @@ def main():
 
     logger.info("Generating Camera Calibrations")
     config_manager = ConfigManager(
-        "maps/map.json", 
+        "maps/map.json",
         "calibrations/mac_calib.json" if os_name == "Darwin" else "calibrations/OV9821_calib.json"
     )
 
@@ -73,9 +73,9 @@ def main():
         vis = frame.copy()
 
         cv2.putText(
-            vis, 
+            vis,
             fps_text,
-            (10, 70), 
+            (10, 70),
             cv2.FONT_HERSHEY_SIMPLEX,
             2,
             (0, 255, 0),
@@ -88,21 +88,16 @@ def main():
         if ids is not None:
             cv2.aruco.drawDetectedMarkers(vis, corners, ids)
 
-
-            for id in ids:
-                tag_str += str(id) + " "
-
             obsv_points = []
             coords = []
             tag_poses = []
             tag_ids = []
 
             for corner, tag_id in zip(corners, ids.flatten()):
-                logger.debug(corner.shape)
                 tag_pose = None
                 tag = config_manager.fiducial_map.get_tag_by_id(int(tag_id))
 
-                if tag != None:
+                if tag is not None:
                     tag_pose = tag.pose
 
                     obsv_points += [
@@ -134,7 +129,6 @@ def main():
                     tag_ids.append(tag_id)
                     tag_poses.append(tag_pose)
 
-            logger.info(len(tag_ids))
             if len(tag_ids) == 1:
                 img_points = corners[0].reshape(-1, 1, 2).astype(np.float32)
 
@@ -178,7 +172,7 @@ def main():
 
                 rvecs_arr.append(rvecs)
                 tvecs_arr.append(tvecs)
-                
+
                 camera_to_field_pose = opencv_to_wpilib(tvecs[0], rvecs[0])
                 camera_to_field = Transform3d(camera_to_field_pose.translation(), camera_to_field_pose.rotation())
                 field_to_camera = camera_to_field.inverse()
@@ -200,44 +194,10 @@ def main():
                         pose.rotation().Z()
                     ])
 
-
-            # for corner, tag_id in zip(corners, ids.flatten()):
-            #     img_points = corner.reshape(-1, 1, 2).astype(np.float32)
-            #
-            #     _, rvecs, tvecs, errors = cv2.solvePnPGeneric(
-            #         SINGLE_FID_COORD_SYSTEM.astype(np.float32),
-            #         img_points,
-            #         config_manager.calibration_data.cam_mat,
-            #         config_manager.calibration_data.dist_coeff,
-            #         flags=cv2.SOLVEPNP_IPPE_SQUARE
-            #     )
-            #
-            #     rvecs_arr.append(rvecs)
-            #     tvecs_arr.append(tvecs)
-            #
-            #     pose = opencv_to_wpilib(tvecs[0], rvecs[0])
-            #
-            #     if args.network_table:
-            #         if tag_id not in tag_pose_publishers:
-            #             topic_name = f"tag_{int(tag_id)}_pose_cam"
-            #             tag_pose_publishers[tag_id] = vision_table.getDoubleArrayTopic(topic_name).publish()
-            #
-            #         pub = tag_pose_publishers[tag_id]
-            #
-            #         pub.set([
-            #             pose.X(),
-            #             pose.Y(),
-            #             pose.Z(),
-            #             pose.rotation().X(),
-            #             pose.rotation().Y(),
-            #             pose.rotation().Z()
-            #         ])
-
-
             if args.network_table:
                 inst.flush()
 
-            for i in range(len(ids)):
+            for i in range(len(tag_ids)):
                 cv2.drawFrameAxes(
                     vis,
                     config_manager.calibration_data.cam_mat,
@@ -334,7 +294,7 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "-d",
         "--debug",
-        action="store_false",
+        action="store_true",
         help="Show debug logs"
     )
 
