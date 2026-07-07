@@ -8,5 +8,10 @@ dependencies = [
     "cscore>=1",
     "opencv-python>=4.12.0.88",
     "pyntcore>=2025.3.2.3",
+    "raylib>=6.0.1.0",
     "robotpy-wpimath>=2025.3.2.3",
 ]
+
+[tool.basedpyright]
+venvPath = "."
+venv = ".venv"

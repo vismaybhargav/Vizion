@@ -5,14 +5,18 @@ from viz_types import Fiducial
 import numpy as np
 import json
 
-MARKER_SIZE = 0.071 # meters
+MARKER_SIZE = 0.071  # meters
 
-SINGLE_FID_COORD_SYSTEM = np.array([
-    [-MARKER_SIZE / 2,  MARKER_SIZE / 2, 0],
-    [ MARKER_SIZE / 2,  MARKER_SIZE / 2, 0],
-    [ MARKER_SIZE / 2, -MARKER_SIZE / 2, 0],
-    [-MARKER_SIZE / 2, -MARKER_SIZE / 2, 0]
-], dtype=np.float32).reshape(-1, 1, 3)
+SINGLE_FID_COORD_SYSTEM = np.array(
+    [
+        [-MARKER_SIZE / 2, MARKER_SIZE / 2, 0],
+        [MARKER_SIZE / 2, MARKER_SIZE / 2, 0],
+        [MARKER_SIZE / 2, -MARKER_SIZE / 2, 0],
+        [-MARKER_SIZE / 2, -MARKER_SIZE / 2, 0],
+    ],
+    dtype=np.float32,
+).reshape(-1, 1, 3)
+
 
 class CameraCalibration:
     """
@@ -54,6 +58,7 @@ class CameraCalibration:
         self.resolution_width = calibration["img_size"][0]
         self.resolution_height = calibration["img_size"][1]
 
+
 class FiducialMap:
     """
     Map of all poses of the fiducials in the map for multitag targeting
@@ -87,19 +92,17 @@ class FiducialMap:
                     tag["ID"],
                     Pose3d(
                         Translation3d(
-                            translation["x"],
-                            translation["y"],
-                            translation["z"]
+                            translation["x"], translation["y"], translation["z"]
                         ),
                         Rotation3d(
                             Quaternion(
                                 rotation["W"],
                                 rotation["X"],
                                 rotation["Y"],
-                                rotation["Z"]
+                                rotation["Z"],
                             )
-                        )
-                    )
+                        ),
+                    ),
                 )
             )
 
@@ -108,6 +111,7 @@ class FiducialMap:
             if tag.id == tag_id:
                 return tag
         return None
+
 
 class ConfigManager:
     """
@@ -131,7 +135,5 @@ class ConfigManager:
         Returns:
             dict: The deserialized json dict
         """
-        with open(file_path, 'r') as file:
+        with open(file_path, "r") as file:
             return json.load(file)
-
-
