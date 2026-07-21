@@ -9,7 +9,12 @@ import logging
 
 from typing import List
 from cv2.typing import MatLike
-from config import MARKER_SIZE, ConfigManager, SINGLE_FID_COORD_SYSTEM
+from config import (
+    MARKER_SIZE,
+    CameraCalibration,
+    ConfigManager,
+    SINGLE_FID_COORD_SYSTEM,
+)
 from numpy.typing import NDArray
 from wpimath.geometry import Pose3d, Transform3d, Translation3d, Rotation3d
 from sim.sim import Simulation
@@ -31,8 +36,14 @@ def main():
     logger.info("Starting NT Client")
     inst = ntcore.NetworkTableInstance.getDefault()
     inst.startClient4("vizion")
+    logger.info("Started NT Client")
 
-    sim = Simulation((1920, 1080), Path("../maps/map.json")) if args.sim else None
+    aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_APRILTAG_36h11)
+    sim = (
+        Simulation((1920, 1080), Path("../maps/2026-rebuilt-welded.json"), aruco_dict)
+        if args.sim
+        else None
+    )
     if sim is not None:
         sim.begin()
 
@@ -40,11 +51,16 @@ def main():
 
     logger.info("Generating Camera Calibrations")
     config_manager = ConfigManager(
-        "../maps/map.json",
+        "../maps/2026-rebuilt-welded.json",
         "../calibrations/mac_calib.json"
         if os_name == "Darwin"
         else "../calibrations/OV9821_calib.json",
     )
+    if sim is not None:
+        config_manager.calibration_data = CameraCalibration.ideal_pinhole(
+            sim.window_size, sim.camera.fovy
+        )
+    logger.info("Generated Camera Calibrations")
 
     tag_pose_publishers = {}
 
@@ -55,8 +71,8 @@ def main():
     if sim is None:
         logger.info("Starting Video Capture")
         cap = cv2.VideoCapture(0)
+        logger.info("Started Video Capture")
 
-    aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_APRILTAG_36h11)
     params = cv2.aruco.DetectorParameters()  # TODO: This needs to be exposed to users
     detector = cv2.aruco.ArucoDetector(aruco_dict, params)
 
@@ -67,7 +83,7 @@ def main():
             if sim.should_close():
                 break
 
-            sim.update(None)  # TODO: Update with with position data
+            sim.update(np.array([10, 10, 0], dtype=np.uint8))
             frame = sim.raylib_screen_to_bgr_np()
         else:
             assert cap is not None
@@ -87,8 +103,6 @@ def main():
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
         corners, ids, _ = detector.detectMarkers(gray)
-        rvecs_arr, tvecs_arr = [], []
-
         vis = frame.copy()
 
         cv2.putText(
@@ -111,6 +125,7 @@ def main():
             coords = []
             tag_poses = []
             tag_ids = []
+            tag_corners = []
 
             for corner, tag_id in zip(corners, ids.flatten()):
                 tag_pose = None
@@ -175,20 +190,41 @@ def main():
 
                     tag_ids.append(tag_id)
                     tag_poses.append(tag_pose)
+                    tag_corners.append(corner)
+
+            # Multi-tag PnP estimates the pose of the field coordinate system,
+            # not an individual tag.  Estimate every visible tag in its local
+            # coordinate system so the debug axes stay attached to that tag.
+            """
+            for corner in tag_corners:
+                success, rvec, tvec = cv2.solvePnP(
+                    SINGLE_FID_COORD_SYSTEM,
+                    corner.reshape(-1, 1, 2).astype(np.float32),
+                    config_manager.calibration_data.cam_mat,
+                    config_manager.calibration_data.dist_coeff,
+                    flags=cv2.SOLVEPNP_IPPE_SQUARE,
+                )
+                if success:
+                    cv2.drawFrameAxes(
+                        vis,
+                        config_manager.calibration_data.cam_mat,
+                        config_manager.calibration_data.dist_coeff,
+                        rvec,
+                        tvec,
+                        MARKER_SIZE,
+                    )
+            """
 
             if len(tag_ids) == 1:
-                img_points = corners[0].reshape(-1, 1, 2).astype(np.float32)
+                img_points = tag_corners[0].reshape(-1, 1, 2).astype(np.float32)
 
-                _, rvecs, tvecs, errors = cv2.solvePnPGeneric(
+                _, rvecs, tvecs, _ = cv2.solvePnPGeneric(
                     SINGLE_FID_COORD_SYSTEM.astype(np.float32),
                     img_points,
                     config_manager.calibration_data.cam_mat,
                     config_manager.calibration_data.dist_coeff,
                     flags=cv2.SOLVEPNP_IPPE_SQUARE,
                 )
-
-                rvecs_arr.append(rvecs)
-                tvecs_arr.append(tvecs)
 
                 pose = opencv_to_wpilib(tvecs[0], rvecs[0])
 
@@ -212,17 +248,14 @@ def main():
                         ]
                     )
 
-            elif args.multi_tag:
-                _, rvecs, tvecs, errors = cv2.solvePnPGeneric(
+            elif len(tag_ids) >= 2:
+                _, rvecs, tvecs, _ = cv2.solvePnPGeneric(
                     np.array(obsv_points),
                     np.array(coords),
                     config_manager.calibration_data.cam_mat,
                     config_manager.calibration_data.dist_coeff,
                     flags=cv2.SOLVEPNP_SQPNP,
                 )
-
-                rvecs_arr.append(rvecs)
-                tvecs_arr.append(tvecs)
 
                 camera_to_field_pose = opencv_to_wpilib(tvecs[0], rvecs[0])
                 camera_to_field = Transform3d(
@@ -251,18 +284,10 @@ def main():
                         ]
                     )
 
+                    print(pose.X(), pose.Y(), pose.Z())
+
             if args.network_table:
                 inst.flush()
-
-            for i in range(len(tag_ids)):
-                cv2.drawFrameAxes(
-                    vis,
-                    config_manager.calibration_data.cam_mat,
-                    config_manager.calibration_data.dist_coeff,
-                    rvecs_arr[i][0],
-                    tvecs_arr[i][0],
-                    MARKER_SIZE,
-                )
 
         cv2.putText(
             vis,

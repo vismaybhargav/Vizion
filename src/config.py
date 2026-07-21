@@ -58,6 +58,31 @@ class CameraCalibration:
         self.resolution_width = calibration["img_size"][0]
         self.resolution_height = calibration["img_size"][1]
 
+    @classmethod
+    def ideal_pinhole(
+        cls, resolution: tuple[int, int], vertical_fov_degrees: float
+    ) -> "CameraCalibration":
+        """Create the calibration for an undistorted perspective camera.
+
+        Raylib's ``Camera3D.fovy`` is a vertical field of view.  Its perspective
+        projection has square pixels, so the horizontal focal length is the same
+        as the vertical focal length in pixel units.
+        """
+        width, height = resolution
+        focal_length = (height / 2.0) / np.tan(np.deg2rad(vertical_fov_degrees) / 2.0)
+
+        return cls(
+            {
+                "camera_matrix": [
+                    [focal_length, 0.0, width / 2.0],
+                    [0.0, focal_length, height / 2.0],
+                    [0.0, 0.0, 1.0],
+                ],
+                "distortion_coefficients": [0.0, 0.0, 0.0, 0.0, 0.0],
+                "img_size": [width, height],
+            }
+        )
+
 
 class FiducialMap:
     """
