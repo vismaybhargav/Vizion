@@ -36,6 +36,7 @@ class FiducialPipeline(BasePipeline):
 
     def run(self, frame: NDArray, vis: NDArray) -> Pose3d:
         corners, ids, _ = self.detector.detectMarkers(frame)
+        pose = Pose3d()
 
         if ids is not None:
             cv2.aruco.drawDetectedMarkers(vis, corners, ids)
@@ -45,7 +46,6 @@ class FiducialPipeline(BasePipeline):
             tag_poses = []
             tag_ids = []
             tag_corners = []
-
             for corner, tag_id in zip(corners, ids.flatten()):
                 tag_pose = None
                 tag = self.config_manager.fiducial_map.get_tag_by_id(int(tag_id))
@@ -139,6 +139,8 @@ class FiducialPipeline(BasePipeline):
                 )
                 field_to_camera = camera_to_field.inverse()
                 pose = Pose3d(field_to_camera.translation(), field_to_camera.rotation())
+
+        return pose
 
     def _wpilibTranslationToOpenCv(self, translation: Translation3d) -> list[float]:
         return [-translation.Y(), -translation.Z(), translation.X()]
