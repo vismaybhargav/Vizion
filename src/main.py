@@ -1,10 +1,12 @@
 import cv2
-import numpy as np
 import time
 import ntcore
 import argparse
 import platform
 import logging
+import pyray as pr
+
+from wpimath.geometry import Pose3d
 
 from config import (
     CameraCalibration,
@@ -28,11 +30,6 @@ def main():
     os_name = platform.system()
     logger.info(os_name)
 
-    logger.info("Starting NT Client")
-    inst = ntcore.NetworkTableInstance.getDefault()
-    inst.startClient4("vizion")
-    logger.info("Started NT Client")
-
     aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_APRILTAG_36h11)
     sim = (
         Simulation((1920, 1080), Path("../maps/2026-rebuilt-welded.json"), aruco_dict)
@@ -42,7 +39,11 @@ def main():
     if sim is not None:
         sim.begin()
 
-    vision_table = inst.getTable("fid-pipeline")
+    nt = ntcore.NetworkTableInstance.getDefault()
+
+    nt.startServer(listen_address="127.0.0.1", port3=1735, port4=5810)
+
+    pose_pub = nt.getStructTopic("/Vizion/FidPose", Pose3d).publish()
 
     logger.info("Generating Camera Calibrations")
     config_manager = ConfigManager(
@@ -75,7 +76,7 @@ def main():
             if sim.should_close():
                 break
 
-            sim.update(np.array([10, 10, 0], dtype=np.uint8))
+            sim.update(pr.Vector3(0, 0, 0.01))
             frame = sim.raylib_screen_to_bgr_np()
         else:
             assert cap is not None
@@ -97,6 +98,8 @@ def main():
         vis = frame.copy()
 
         pose = fid_pipeline.run(gray, vis)
+        # print(pose)
+        pose_pub.set(pose)
 
         cv2.putText(
             vis,
@@ -120,6 +123,8 @@ def main():
     if cap is not None:
         cap.release()
     cv2.destroyAllWindows()
+    pose_pub.close()
+    nt.stopServer()
 
 
 def make_safe_frame(frame: NDArray) -> NDArray:

@@ -8,6 +8,11 @@ import cv2
 import numpy as np
 import math
 
+transform_1 = Transform3d(0, MARKER_SIZE / 2.0, -MARKER_SIZE / 2.0, Rotation3d())
+transform_2 = Transform3d(0, -MARKER_SIZE / 2.0, -MARKER_SIZE / 2.0, Rotation3d())
+transform_3 = Transform3d(0, -MARKER_SIZE / 2.0, MARKER_SIZE / 2.0, Rotation3d())
+transform_4 = Transform3d(0, MARKER_SIZE / 2.0, -MARKER_SIZE / 2.0, Rotation3d())
+
 
 class BasePipeline(ABC):
     """Base abstract class for various pipelines that can be run"""
@@ -46,6 +51,7 @@ class FiducialPipeline(BasePipeline):
             tag_poses = []
             tag_ids = []
             tag_corners = []
+
             for corner, tag_id in zip(corners, ids.flatten()):
                 tag_pose = None
                 tag = self.config_manager.fiducial_map.get_tag_by_id(int(tag_id))
@@ -54,51 +60,58 @@ class FiducialPipeline(BasePipeline):
                     tag_pose = tag.pose
 
                     obsv_points += [
-                        self._wpilibTranslationToOpenCv(
-                            (
-                                tag_pose
-                                + Transform3d(
-                                    0,
-                                    MARKER_SIZE / 2.0,
-                                    -MARKER_SIZE / 2.0,
-                                    Rotation3d(),
-                                )
-                            ).translation()
-                        ),
-                        self._wpilibTranslationToOpenCv(
-                            (
-                                tag_pose
-                                + Transform3d(
-                                    0,
-                                    -MARKER_SIZE / 2.0,
-                                    -MARKER_SIZE / 2.0,
-                                    Rotation3d(),
-                                )
-                            ).translation()
-                        ),
-                        self._wpilibTranslationToOpenCv(
-                            (
-                                tag_pose
-                                + Transform3d(
-                                    0,
-                                    -MARKER_SIZE / 2.0,
-                                    MARKER_SIZE / 2.0,
-                                    Rotation3d(),
-                                )
-                            ).translation()
-                        ),
-                        self._wpilibTranslationToOpenCv(
-                            (
-                                tag_pose
-                                + Transform3d(
-                                    0,
-                                    MARKER_SIZE / 2.0,
-                                    MARKER_SIZE / 2.0,
-                                    Rotation3d(),
-                                )
-                            ).translation()
-                        ),
+                        self._get_observation_point_translation(tag_pose, transform_1),
+                        self._get_observation_point_translation(tag_pose, transform_2),
+                        self._get_observation_point_translation(tag_pose, transform_3),
+                        self._get_observation_point_translation(tag_pose, transform_4),
                     ]
+
+                    # obsv_points += [
+                    #     self._wpilibTranslationToOpenCv(
+                    #         (
+                    #             tag_pose
+                    #             + Transform3d(
+                    #                 0,
+                    #                 MARKER_SIZE / 2.0,
+                    #                 -MARKER_SIZE / 2.0,
+                    #                 Rotation3d(),
+                    #             )
+                    #         ).translation()
+                    #     ),
+                    #     self._wpilibTranslationToOpenCv(
+                    #         (
+                    #             tag_pose
+                    #             + Transform3d(
+                    #                 0,
+                    #                 -MARKER_SIZE / 2.0,
+                    #                 -MARKER_SIZE / 2.0,
+                    #                 Rotation3d(),
+                    #             )
+                    #         ).translation()
+                    #     ),
+                    #     self._wpilibTranslationToOpenCv(
+                    #         (
+                    #             tag_pose
+                    #             + Transform3d(
+                    #                 0,
+                    #                 -MARKER_SIZE / 2.0,
+                    #                 MARKER_SIZE / 2.0,
+                    #                 Rotation3d(),
+                    #             )
+                    #         ).translation()
+                    #     ),
+                    #     self._wpilibTranslationToOpenCv(
+                    #         (
+                    #             tag_pose
+                    #             + Transform3d(
+                    #                 0,
+                    #                 MARKER_SIZE / 2.0,
+                    #                 MARKER_SIZE / 2.0,
+                    #                 Rotation3d(),
+                    #             )
+                    #         ).translation()
+                    #     ),
+                    # ]
 
                     coords += [
                         [corner[0][0][0], corner[0][0][1]],
@@ -141,6 +154,11 @@ class FiducialPipeline(BasePipeline):
                 pose = Pose3d(field_to_camera.translation(), field_to_camera.rotation())
 
         return pose
+
+    def _get_observation_point_translation(
+        self, tag_pose: Pose3d, transform: Transform3d
+    ) -> list[float]:
+        return self._wpilibTranslationToOpenCv((tag_pose + transform).translation())
 
     def _wpilibTranslationToOpenCv(self, translation: Translation3d) -> list[float]:
         return [-translation.Y(), -translation.Z(), translation.X()]

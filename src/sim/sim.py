@@ -42,24 +42,26 @@ class Simulation:
     fids: list[SimFiducial]
     fid_models: list[pr.Model]
     fid_textures: list[pr.Texture]
-    fid_meshes: list[pr.Mesh]
     field_model: pr.Model
     aruco_dictionary: cv2.aruco.Dictionary
     window_size: tuple[int, int]
 
     def __init__(
         self,
-        window_size: tuple[int, int],
-        map_path: Path,
-        aruco_dict: cv2.aruco.Dictionary,
+        window_size: tuple[int, int] = (1920, 1080),
+        map_path: Path = Path("../maps/2026-rebuilt-welded.json"),
+        aruco_dict: cv2.aruco.Dictionary = cv2.aruco.getPredefinedDictionary(
+            cv2.aruco.DICT_APRILTAG_36h11
+        ),
     ):
         self.camera = pr.Camera3D(
             pr.Vector3(0.0, 0.3, 0.0),
-            pr.Vector3(0.0, 0.3, 1.0),
+            pr.Vector3(0.0, 0.0, -1.0),
             pr.Vector3(0.0, 1.0, 0.0),
             45.0,
             pr.CameraProjection.CAMERA_PERSPECTIVE,
         )
+        self.camera.target = pr.vector3_add(self.camera.position, pr.Vector3(0, 0, -1))
         self.map_path = map_path
         self.aruco_dictionary = aruco_dict
         self.fids = []
@@ -67,7 +69,6 @@ class Simulation:
 
         # These are solely used for resource storage, use actual SimFiducial
         self.fid_models = []
-        self.fid_meshes = []
         self.fid_textures = []
 
     def begin(self) -> None:
@@ -77,10 +78,12 @@ class Simulation:
         pr.init_window(*self.window_size, "Vizion Sim")
         self._configure_environment()
 
-    def update(self, _camera_pos: npt.NDArray[np.uint8]) -> None:
+    def update(self, camera_pos: pr.Vector3) -> None:
         pr.begin_drawing()
+        self.camera.position = pr.vector3_add(self.camera.position, camera_pos)
         pr.begin_mode_3d(self.camera)
         pr.clear_background(pr.BLACK)
+        # pr.draw_cube((0, 0, 0), 1, 1, 1, pr.RED)
         pr.draw_model_ex(
             self.field_model,
             pr.Vector3(0, 0, 0),
@@ -89,6 +92,7 @@ class Simulation:
             pr.vector3_one(),
             pr.WHITE,
         )
+
         for fid in self.fids:
             pr.draw_model(fid.model, fid.render_pose.pos, 1, pr.WHITE)
         pr.end_mode_3d()
@@ -233,7 +237,6 @@ class Simulation:
         mesh: pr.Mesh = pr.gen_mesh_plane(0.2667, 0.2667, 1, 1)
         model: pr.Model = pr.load_model_from_mesh(mesh)
 
-        self.fid_meshes.append(mesh)
         self.fid_models.append(model)
         self.fid_textures.append(tex)
 
@@ -271,8 +274,6 @@ class Simulation:
 
         for model in self.fid_models:
             pr.unload_model(model)
-        # for mesh in self.fid_meshes:
-        #     pr.unload_mesh(mesh)
         for texture in self.fid_textures:
             pr.unload_texture(texture)
 
